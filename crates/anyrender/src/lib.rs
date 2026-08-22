@@ -182,7 +182,49 @@ pub fn render_to_buffer<R: ImageRenderer, F: FnOnce(&mut R::ScenePainter<'_>)>(
 }
 
 /// Abstraction for drawing a 2D scene
+/// Which part of an element the following ops belong to.
+///
+/// Painting is lossy about intent: a background, a border and a text
+/// underline all arrive as fills, and a consumer that is not a pixel
+/// grid has to guess which is which from geometry: coverage ratios,
+/// thickness thresholds, whether a character happens to sit under the
+/// rect. The painter knows, so it can say.
+///
+/// Deliberately coarse. Which edge a border is does not need saying,
+/// because a line's position already places it; what cannot be
+/// recovered is whether a rect was a border at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScenePart {
+    Background,
+    Border,
+    Outline,
+    /// Painted by the table, not by the cell that appears to own it.
+    TableBorder,
+    TableRowBackground,
+    /// underline / overline / line-through.
+    TextDecoration,
+    /// A list item's bullet or number.
+    Marker,
+    /// A checkbox, with its live checked state. Carried on the part
+    /// rather than left to the backend to work out, because the DOM is
+    /// the only thing that knows it and a backend drawing a control
+    /// has to agree with `:checked`.
+    Checkbox { checked: bool },
+    /// A radio button, likewise.
+    Radio { checked: bool },
+}
+
 pub trait PaintScene: RenderContext {
+    /// Note that the following ops paint `part` of element `node_id`,
+    /// until the matching `end_part`.
+    ///
+    /// Defaults to nothing, so a scene that does not care, such as any
+    /// pixel backend, is unaffected and needs no change.
+    fn begin_part(&mut self, _node_id: u64, _part: ScenePart) {}
+
+    /// Close the most recent `begin_part`.
+    fn end_part(&mut self) {}
+
     /// Removes all content from the scene
     fn reset(&mut self);
 
