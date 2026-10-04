@@ -250,6 +250,22 @@ pub trait PaintScene: RenderContext {
     /// However, the transforms are not saved or modified by the layer stack.
     fn push_clip_layer(&mut self, fill: Fill, transform: Affine, clip: &impl Shape);
 
+    /// Clips every drawing command until the matching `pop_clip_path`,
+    /// without isolating them in a layer. Only a caller that knows the
+    /// result matches `push_clip_layer` may use it, e.g. for a clip that
+    /// covers whole device pixels.
+    ///
+    /// Defaulted to a clip layer so a backend without layer-free clips
+    /// keeps today's output.
+    fn push_clip_path(&mut self, fill: Fill, transform: Affine, clip: &impl Shape) {
+        self.push_clip_layer(fill, transform, clip);
+    }
+
+    /// Close the most recent `push_clip_path`.
+    fn pop_clip_path(&mut self) {
+        self.pop_layer();
+    }
+
     /// Pops the current layer.
     fn pop_layer(&mut self);
 
