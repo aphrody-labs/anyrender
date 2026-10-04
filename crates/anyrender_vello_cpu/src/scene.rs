@@ -109,6 +109,17 @@ impl PaintScene for VelloCpuScenePainter {
             .push_clip_layer(&clip.into_path(DEFAULT_TOLERANCE));
     }
 
+    fn push_clip_path(&mut self, fill: Fill, transform: Affine, clip: &impl Shape) {
+        self.render_ctx.set_transform(transform);
+        self.render_ctx.set_fill_rule(fill);
+        self.render_ctx
+            .push_clip_path(&clip.into_path(DEFAULT_TOLERANCE));
+    }
+
+    fn pop_clip_path(&mut self) {
+        self.render_ctx.pop_clip();
+    }
+
     fn pop_layer(&mut self) {
         self.render_ctx.pop_layer();
     }
