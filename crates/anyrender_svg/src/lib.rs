@@ -3,7 +3,7 @@
 
 //! Render an SVG into any impl of [`anyrender::PaintScene`].
 //!
-//! This currently lacks support for some important SVG features. Known missing features include: masking, filter effects, group backgrounds
+//! This currently lacks support for some important SVG features. Masking is partial: alpha masks and white luminance masks are composited. Known missing features include: other luminance masks, nested mask references, filter effects, group backgrounds
 //! path shape-rendering, and patterns.
 
 // LINEBENDER LINT SET - lib.rs - v1

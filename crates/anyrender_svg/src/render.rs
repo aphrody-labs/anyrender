@@ -83,7 +83,16 @@ pub(crate) fn render_group<S: PaintScene, F: FnMut(&mut S, &usvg::Node)>(
                     _ => false,
                 };
 
+                let masked = g.mask().is_some_and(|mask| {
+                    push_mask(scene, mask, global_transform * transform, error_handler)
+                });
+
                 render_group(scene, g, Affine::IDENTITY, global_transform, error_handler);
+
+                if masked {
+                    scene.pop_layer();
+                    scene.pop_layer();
+                }
 
                 if did_push_layer {
                     scene.pop_layer();
@@ -159,6 +168,69 @@ pub(crate) fn render_group<S: PaintScene, F: FnMut(&mut S, &usvg::Node)>(
             }
         }
     }
+}
+
+fn white_mask_group(group: &usvg::Group) -> bool {
+    group.mask().is_none()
+        && group.filters().is_empty()
+        && group.blend_mode() == usvg::BlendMode::Normal
+        && group.children().iter().all(|node| match node {
+            Node::Group(group) => white_mask_group(group),
+            Node::Path(path) => path
+                .fill()
+                .map(|fill| fill.paint())
+                .into_iter()
+                .chain(path.stroke().map(|stroke| stroke.paint()))
+                .all(|paint| matches!(paint, usvg::Paint::Color(color) if color.red == 255 && color.green == 255 && color.blue == 255)),
+            Node::Text(text) => white_mask_group(text.flattened()),
+            Node::Image(_) => false,
+        })
+}
+
+fn push_mask<S: PaintScene, F: FnMut(&mut S, &usvg::Node)>(
+    scene: &mut S,
+    mask: &usvg::Mask,
+    transform: Affine,
+    error_handler: &mut F,
+) -> bool {
+    // White luminance masks have the same coverage as alpha masks. Coloured
+    // luminance masks need conversion after compositing the mask's children.
+    if mask.mask().is_some()
+        || (mask.kind() == usvg::MaskType::Luminance && !white_mask_group(mask.root()))
+    {
+        return false;
+    }
+    let bounds = mask.rect();
+    let clip = kurbo::Rect::from_origin_size(
+        (f64::from(bounds.x()), f64::from(bounds.y())),
+        (f64::from(bounds.width()), f64::from(bounds.height())),
+    );
+    // Isolate the mask from the backdrop, then retain only source pixels
+    // covered by its alpha. The clip also bounds transparent mask regions.
+    for compose in [peniko::Compose::SrcOver, peniko::Compose::SrcIn] {
+        scene.push_layer(
+            Fill::NonZero,
+            BlendMode {
+                mix: peniko::Mix::Normal,
+                compose,
+            },
+            1.0,
+            transform,
+            &clip,
+            None,
+            None,
+        );
+        if compose == peniko::Compose::SrcOver {
+            render_group(
+                scene,
+                mask.root(),
+                Affine::IDENTITY,
+                transform,
+                error_handler,
+            );
+        }
+    }
+    true
 }
 
 fn fill<S: PaintScene, F: FnMut(&mut S, &usvg::Node)>(
